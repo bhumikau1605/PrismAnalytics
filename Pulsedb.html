@@ -1,0 +1,1053 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Prism Analytics</title>
+<link href="https://fonts.googleapis.com/css2?family=Clash+Display:wght@400;500;600;700&family=Cabinet+Grotesk:wght@400;500;700;800&family=Fira+Code:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+<style>
+:root {
+  --coral:   #FF6B6B;
+  --orange:  #FF8E3C;
+  --yellow:  #FFD93D;
+  --lime:    #6BCB77;
+  --sky:     #4FC3F7;
+  --indigo:  #7C83FD;
+  --pink:    #F72585;
+  --purple:  #B5179E;
+  --white:   #FFFFFF;
+  --off:     #F9F7FF;
+  --ink:     #1A1035;
+  --ink2:    #2D2550;
+  --muted:   #8B85A8;
+  --card:    rgba(255,255,255,0.92);
+  --border:  rgba(124,131,253,0.18);
+  --shadow:  0 4px 32px rgba(124,131,253,0.13);
+  --r:       18px;
+  --font-h:  'Cabinet Grotesk', sans-serif;
+  --font-m:  'Fira Code', monospace;
+}
+
+*, *::before, *::after { box-sizing: border-box; margin:0; padding:0; }
+
+body {
+  font-family: var(--font-h);
+  background: var(--off);
+  color: var(--ink);
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+/* ── ANIMATED MESH BG ── */
+.mesh-bg {
+  position: fixed; inset: 0; z-index: 0; pointer-events: none;
+  background:
+    radial-gradient(ellipse 900px 600px at 0% 0%, rgba(247,37,133,0.10) 0%, transparent 60%),
+    radial-gradient(ellipse 700px 500px at 100% 15%, rgba(76,195,247,0.12) 0%, transparent 60%),
+    radial-gradient(ellipse 600px 400px at 70% 80%, rgba(107,203,119,0.10) 0%, transparent 60%),
+    radial-gradient(ellipse 500px 400px at 20% 90%, rgba(255,217,61,0.09) 0%, transparent 60%);
+  animation: meshDrift 18s ease-in-out infinite alternate;
+}
+@keyframes meshDrift {
+  0%   { filter: hue-rotate(0deg); }
+  100% { filter: hue-rotate(40deg); }
+}
+
+/* Floating blobs */
+.blob {
+  position: fixed; border-radius: 50%; filter: blur(80px); opacity: 0.18; pointer-events: none; z-index: 0;
+  animation: blobFloat 12s ease-in-out infinite alternate;
+}
+.blob-1 { width:400px;height:400px;top:-100px;left:-100px;background:var(--pink); animation-delay:0s; }
+.blob-2 { width:350px;height:350px;top:40%;right:-80px;background:var(--sky); animation-delay:-4s; }
+.blob-3 { width:300px;height:300px;bottom:-80px;left:30%;background:var(--lime); animation-delay:-8s; }
+@keyframes blobFloat {
+  0%   { transform: translate(0,0) scale(1); }
+  100% { transform: translate(30px,20px) scale(1.08); }
+}
+
+/* ── LAYOUT ── */
+.app { position:relative; z-index:1; display:flex; min-height:100vh; }
+
+/* ── SIDEBAR ── */
+.sidebar {
+  width: 260px; flex-shrink:0;
+  background: var(--ink);
+  padding: 0;
+  display: flex; flex-direction: column;
+  position: sticky; top:0; height:100vh;
+  overflow: hidden;
+}
+.sidebar::before {
+  content:''; position:absolute; inset:0;
+  background: linear-gradient(160deg, #2D2550 0%, #1A1035 60%, #0D0920 100%);
+}
+.sidebar::after {
+  content:''; position:absolute; top:0;left:0;right:0;height:3px;
+  background: linear-gradient(90deg, var(--pink), var(--indigo), var(--sky), var(--lime), var(--yellow), var(--coral));
+}
+
+.sidebar > * { position:relative; z-index:1; }
+
+.logo-area {
+  padding: 28px 24px 22px;
+  border-bottom: 1px solid rgba(255,255,255,0.07);
+}
+.logo-wordmark {
+  font-size: 22px; font-weight: 800; letter-spacing:-0.5px;
+  background: linear-gradient(135deg, var(--yellow) 0%, var(--coral) 40%, var(--pink) 80%);
+  -webkit-background-clip:text; -webkit-text-fill-color:transparent;
+}
+.logo-tag {
+  font-family: var(--font-m); font-size:9px; color:rgba(255,255,255,0.3);
+  margin-top:3px; letter-spacing:0.14em; text-transform:uppercase;
+}
+
+.db-status {
+  margin: 14px 16px 0;
+  background: rgba(255,255,255,0.05);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 12px; padding: 12px 14px;
+  cursor: pointer; transition: all 0.2s;
+}
+.db-status:hover { background: rgba(255,255,255,0.09); }
+.db-status-row { display:flex; align-items:center; gap:8px; }
+.db-dot { width:8px;height:8px;border-radius:50%;background:var(--yellow);flex-shrink:0; animation: blink 2s infinite; }
+.db-dot.connected { background: var(--lime); animation:none; }
+@keyframes blink { 0%,100%{opacity:1}50%{opacity:0.3} }
+.db-label { font-size:11px; font-weight:700; color:rgba(255,255,255,0.7); }
+.db-sub { font-family:var(--font-m); font-size:9px; color:rgba(255,255,255,0.3); margin-top:3px; }
+
+.nav { padding:16px 12px; flex:1; overflow-y:auto; }
+.nav-section {
+  font-family:var(--font-m); font-size:9px; color:rgba(255,255,255,0.25);
+  letter-spacing:0.14em; padding:0 10px; margin:14px 0 6px;
+}
+.nav-item {
+  display:flex; align-items:center; gap:10px;
+  padding:10px 12px; border-radius:12px; cursor:pointer;
+  font-size:13px; font-weight:700; color:rgba(255,255,255,0.45);
+  transition:all 0.2s; margin-bottom:2px; position:relative;
+}
+.nav-item:hover { background:rgba(255,255,255,0.06); color:rgba(255,255,255,0.8); }
+.nav-item.active {
+  background: linear-gradient(135deg, rgba(247,37,133,0.2), rgba(124,131,253,0.15));
+  color: #fff;
+  border: 1px solid rgba(247,37,133,0.25);
+}
+.nav-item.active::before {
+  content:''; position:absolute; left:0; top:20%; bottom:20%;
+  width:3px; border-radius:2px;
+  background: linear-gradient(180deg, var(--pink), var(--indigo));
+}
+.nav-icon { font-size:16px; width:22px; text-align:center; }
+.nav-pill {
+  margin-left:auto; background:var(--pink); color:#fff;
+  font-size:9px; font-weight:800; padding:2px 7px; border-radius:10px;
+  font-family:var(--font-m);
+}
+
+.sidebar-bottom {
+  padding:16px 20px;
+  border-top:1px solid rgba(255,255,255,0.06);
+}
+.range-label { font-family:var(--font-m); font-size:9px; color:rgba(255,255,255,0.25); margin-bottom:8px; letter-spacing:0.1em; }
+.range-btns { display:flex; gap:6px; }
+.range-btn {
+  flex:1; padding:6px 0; border-radius:8px; border:1px solid rgba(255,255,255,0.1);
+  background:transparent; color:rgba(255,255,255,0.4); font-size:11px; font-weight:700;
+  cursor:pointer; font-family:var(--font-h); transition:all 0.2s;
+}
+.range-btn.active {
+  background: linear-gradient(135deg, var(--pink), var(--indigo));
+  border-color:transparent; color:#fff;
+}
+
+/* ── MAIN ── */
+.main { flex:1; overflow:hidden; min-width:0; }
+
+.topbar {
+  padding:20px 32px;
+  background:rgba(249,247,255,0.85);
+  backdrop-filter:blur(20px);
+  border-bottom:2px solid rgba(124,131,253,0.1);
+  display:flex; align-items:center; justify-content:space-between;
+  position:sticky; top:0; z-index:20;
+}
+.page-title { font-size:22px; font-weight:800; }
+.page-sub { font-family:var(--font-m); font-size:10px; color:var(--muted); margin-top:2px; }
+
+.topbar-actions { display:flex; align-items:center; gap:10px; }
+.btn {
+  display:inline-flex; align-items:center; gap:7px;
+  padding:9px 18px; border-radius:12px; border:none; cursor:pointer;
+  font-family:var(--font-h); font-size:13px; font-weight:700;
+  transition:all 0.18s;
+}
+.btn-ghost { background:rgba(124,131,253,0.1); color:var(--indigo); border:1.5px solid rgba(124,131,253,0.2); }
+.btn-ghost:hover { background:rgba(124,131,253,0.18); transform:translateY(-1px); }
+.btn-grad {
+  background: linear-gradient(135deg, var(--pink) 0%, var(--indigo) 100%);
+  color:#fff; box-shadow: 0 4px 18px rgba(247,37,133,0.35);
+}
+.btn-grad:hover { transform:translateY(-2px); box-shadow:0 8px 28px rgba(247,37,133,0.45); }
+
+.content { padding:28px 32px; }
+
+/* ── KPI CARDS ── */
+.kpi-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:16px; margin-bottom:24px; }
+@media(max-width:1100px){ .kpi-grid{grid-template-columns:repeat(2,1fr);} }
+
+.kpi {
+  border-radius:var(--r); padding:22px 20px; position:relative; overflow:hidden;
+  box-shadow: var(--shadow); transition:transform 0.2s, box-shadow 0.2s;
+  cursor:default;
+}
+.kpi:hover { transform:translateY(-3px); box-shadow:0 12px 40px rgba(0,0,0,0.18); }
+.kpi-1 { background:linear-gradient(135deg, #FF6B6B 0%, #FF8E3C 100%); }
+.kpi-2 { background:linear-gradient(135deg, #F72585 0%, #7C83FD 100%); }
+.kpi-3 { background:linear-gradient(135deg, #4FC3F7 0%, #6BCB77 100%); }
+.kpi-4 { background:linear-gradient(135deg, #FFD93D 0%, #FF6B6B 100%); }
+.kpi::before {
+  content:''; position:absolute; top:-30px;right:-30px;
+  width:100px;height:100px;border-radius:50%;
+  background:rgba(255,255,255,0.12);
+}
+.kpi::after {
+  content:''; position:absolute; bottom:-20px;left:-20px;
+  width:70px;height:70px;border-radius:50%;
+  background:rgba(255,255,255,0.08);
+}
+.kpi-icon-wrap { font-size:24px; margin-bottom:12px; }
+.kpi-lbl { font-family:var(--font-m); font-size:9px; color:rgba(255,255,255,0.7); letter-spacing:0.1em; text-transform:uppercase; margin-bottom:4px; }
+.kpi-val { font-size:30px; font-weight:800; color:#fff; line-height:1; }
+.kpi-delta {
+  display:inline-flex; align-items:center; gap:3px; margin-top:8px;
+  background:rgba(255,255,255,0.2); color:#fff;
+  font-family:var(--font-m); font-size:10px; font-weight:600;
+  padding:3px 9px; border-radius:10px;
+}
+
+/* ── CARDS ── */
+.card {
+  background: var(--card); border-radius:var(--r);
+  border: 1.5px solid var(--border); box-shadow: var(--shadow);
+  padding: 22px; overflow:hidden; position:relative;
+}
+.card-header { display:flex; align-items:flex-start; justify-content:space-between; margin-bottom:18px; }
+.card-title { font-size:15px; font-weight:800; color:var(--ink); }
+.card-sub { font-family:var(--font-m); font-size:10px; color:var(--muted); margin-top:2px; }
+.chip {
+  font-family:var(--font-m); font-size:9px; font-weight:600; padding:4px 10px; border-radius:10px;
+  text-transform:uppercase; letter-spacing:0.06em; white-space:nowrap;
+}
+.chip-coral  { background:rgba(255,107,107,0.12); color:var(--coral); }
+.chip-indigo { background:rgba(124,131,253,0.12); color:var(--indigo); }
+.chip-lime   { background:rgba(107,203,119,0.12); color:#3aaa4f; }
+.chip-pink   { background:rgba(247,37,133,0.12);  color:var(--pink); }
+.chip-sky    { background:rgba(79,195,247,0.12);  color:#1a9fd4; }
+.chip-yellow { background:rgba(255,217,61,0.15);  color:#c49000; }
+
+.g2 { display:grid; gap:20px; grid-template-columns:1fr 1fr; margin-bottom:24px; }
+.g3 { display:grid; gap:20px; grid-template-columns:2fr 1fr; margin-bottom:24px; }
+.g1 { margin-bottom:24px; }
+@media(max-width:1000px){ .g2,.g3{grid-template-columns:1fr;} }
+
+canvas { max-height:260px; }
+
+/* ── HEATMAP ── */
+.heatmap-wrap { overflow-x:auto; padding-bottom:4px; }
+.hm-grid { display:grid; grid-template-columns:50px repeat(24,1fr); gap:3px; min-width:600px; }
+.hm-lbl  { display:flex; align-items:center; font-family:var(--font-m); font-size:9px; color:var(--muted); justify-content:flex-end; padding-right:8px; }
+.hm-cell {
+  height:24px; border-radius:5px; cursor:default; transition:transform 0.12s, box-shadow 0.12s;
+}
+.hm-cell:hover { transform:scale(1.4); box-shadow:0 2px 10px rgba(0,0,0,0.2); z-index:5; position:relative; }
+.hm-hours { display:grid; grid-template-columns:50px repeat(24,1fr); gap:3px; margin-bottom:5px; min-width:600px; }
+.hm-h { font-family:var(--font-m); font-size:8px; color:var(--muted); text-align:center; }
+
+/* ── FUNNEL ── */
+.funnel-stage { margin-bottom:10px; }
+.funnel-bar-outer { background:rgba(0,0,0,0.05); border-radius:10px; height:46px; overflow:hidden; position:relative; }
+.funnel-bar-inner {
+  height:100%; border-radius:10px;
+  display:flex; align-items:center; justify-content:space-between;
+  padding:0 16px; transition:width 1s cubic-bezier(.4,0,.2,1);
+}
+.funnel-bar-inner span { font-size:12px; font-weight:700; color:#fff; }
+.funnel-meta { display:flex; align-items:center; justify-content:space-between; margin-top:4px; padding:0 4px; }
+.funnel-name { font-size:12px; font-weight:800; }
+.funnel-drop { font-family:var(--font-m); font-size:10px; color:var(--coral); font-weight:600; }
+
+/* ── RETENTION MATRIX ── */
+.ret-wrap { overflow-x:auto; }
+.ret-grid { display:grid; min-width:500px; gap:3px; font-family:var(--font-m); }
+.ret-row { display:flex; gap:3px; align-items:center; }
+.ret-label { width:56px; font-size:9px; color:var(--muted); flex-shrink:0; }
+.ret-cell {
+  width:48px; height:30px; border-radius:6px; display:flex; align-items:center; justify-content:center;
+  font-size:9px; font-weight:700; cursor:default; transition:transform 0.12s; flex-shrink:0;
+}
+.ret-cell:hover { transform:scale(1.15); z-index:2; position:relative; }
+
+/* ── USERS TABLE ── */
+.tbl { width:100%; border-collapse:collapse; font-size:12.5px; }
+.tbl th { font-family:var(--font-m); font-size:9px; color:var(--muted); text-transform:uppercase; letter-spacing:0.08em; padding:9px 12px; border-bottom:2px solid var(--border); text-align:left; }
+.tbl td { padding:10px 12px; border-bottom:1px solid rgba(124,131,253,0.07); }
+.tbl tr:last-child td { border:none; }
+.tbl tr:hover td { background:rgba(124,131,253,0.04); }
+
+.badge { display:inline-block; padding:2px 9px; border-radius:20px; font-size:10px; font-weight:700; font-family:var(--font-m); }
+.badge-new      { background:rgba(79,195,247,0.15); color:#1a9fd4; }
+.badge-return   { background:rgba(107,203,119,0.15); color:#3aaa4f; }
+.badge-power    { background:linear-gradient(135deg,rgba(247,37,133,0.15),rgba(124,131,253,0.15)); color:var(--pink); }
+.badge-atrisk   { background:rgba(255,217,61,0.18); color:#b88a00; }
+.badge-churned  { background:rgba(255,107,107,0.13); color:var(--coral); }
+
+.bar-row { display:flex; align-items:center; gap:6px; }
+.bar-tr { flex:1; height:5px; background:rgba(0,0,0,0.08); border-radius:3px; overflow:hidden; }
+.bar-f  { height:100%; border-radius:3px; }
+
+/* ── DB CONFIG ── */
+.db-modal {
+  position:fixed; inset:0; z-index:100; display:none; align-items:center; justify-content:center;
+  background:rgba(26,16,53,0.7); backdrop-filter:blur(8px);
+}
+.db-modal.open { display:flex; }
+.db-panel {
+  background:#fff; border-radius:24px; padding:32px; width:520px; max-width:95vw;
+  box-shadow:0 24px 80px rgba(0,0,0,0.25); animation:popIn 0.3s cubic-bezier(.34,1.56,.64,1);
+}
+@keyframes popIn { from{transform:scale(0.85);opacity:0} to{transform:scale(1);opacity:1} }
+.db-panel h2 { font-size:20px; font-weight:800; margin-bottom:4px; }
+.db-panel p  { font-size:12px; color:var(--muted); margin-bottom:24px; font-family:var(--font-m); }
+.form-row { margin-bottom:14px; }
+.form-lbl { font-size:11px; font-weight:700; color:var(--ink2); margin-bottom:5px; display:block; font-family:var(--font-m); }
+.form-inp {
+  width:100%; padding:10px 14px; border-radius:10px; border:1.5px solid var(--border);
+  font-family:var(--font-m); font-size:12px; color:var(--ink);
+  background:var(--off); outline:none; transition:border-color 0.2s;
+}
+.form-inp:focus { border-color:var(--indigo); }
+.form-row-2 { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+.db-type-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; margin-bottom:14px; }
+.db-type-btn {
+  padding:10px; border-radius:12px; border:1.5px solid var(--border);
+  background:var(--off); cursor:pointer; font-size:12px; font-weight:700;
+  font-family:var(--font-h); transition:all 0.18s; text-align:center;
+}
+.db-type-btn:hover { border-color:var(--indigo); }
+.db-type-btn.sel { border-color:var(--pink); background:rgba(247,37,133,0.07); color:var(--pink); }
+.db-actions { display:flex; gap:10px; margin-top:20px; }
+.db-close { background:rgba(0,0,0,0.05); color:var(--muted); border:none; padding:10px 18px; border-radius:10px; cursor:pointer; font-family:var(--font-h); font-weight:700; font-size:13px; }
+
+/* ── SECTIONS ── */
+.section { display:none; animation:fadeUp 0.3s ease; }
+.section.active { display:block; }
+@keyframes fadeUp { from{opacity:0;transform:translateY(12px)} to{opacity:1;transform:none} }
+
+/* ── TOOLTIP ── */
+.tip { position:fixed; z-index:200; pointer-events:none; display:none;
+  background:var(--ink); color:#fff; border-radius:8px; padding:7px 12px;
+  font-family:var(--font-m); font-size:10px; box-shadow:0 4px 16px rgba(0,0,0,0.3);
+}
+
+/* SCROLLBAR */
+::-webkit-scrollbar { width:5px; height:5px; }
+::-webkit-scrollbar-track { background:transparent; }
+::-webkit-scrollbar-thumb { background:rgba(124,131,253,0.25); border-radius:3px; }
+</style>
+</head>
+<body>
+
+<div class="mesh-bg"></div>
+<div class="blob blob-1"></div>
+<div class="blob blob-2"></div>
+<div class="blob blob-3"></div>
+<div class="tip" id="tip"></div>
+
+<!-- DB CONFIG MODAL -->
+<div class="db-modal" id="dbModal">
+  <div class="db-panel">
+    <h2>🔌 Connect Database</h2>
+    <p>Configure your company database. Credentials are stored locally only.</p>
+
+    <div class="form-row">
+      <label class="form-lbl">DATABASE TYPE</label>
+      <div class="db-type-grid">
+        <div class="db-type-btn sel" onclick="selectDB(this)">🐘 PostgreSQL</div>
+        <div class="db-type-btn" onclick="selectDB(this)">🐬 MySQL</div>
+        <div class="db-type-btn" onclick="selectDB(this)">🍃 MongoDB</div>
+        <div class="db-type-btn" onclick="selectDB(this)">☁️ BigQuery</div>
+        <div class="db-type-btn" onclick="selectDB(this)">❄️ Snowflake</div>
+        <div class="db-type-btn" onclick="selectDB(this)">📦 SQLite</div>
+      </div>
+    </div>
+
+    <div class="form-row-2">
+      <div class="form-row"><label class="form-lbl">HOST</label><input class="form-inp" placeholder="db.company.com" id="dbHost"></div>
+      <div class="form-row"><label class="form-lbl">PORT</label><input class="form-inp" placeholder="5432" id="dbPort" value="5432"></div>
+    </div>
+    <div class="form-row"><label class="form-lbl">DATABASE NAME</label><input class="form-inp" placeholder="analytics_db" id="dbName"></div>
+    <div class="form-row-2">
+      <div class="form-row"><label class="form-lbl">USERNAME</label><input class="form-inp" placeholder="readonly_user" id="dbUser"></div>
+      <div class="form-row"><label class="form-lbl">PASSWORD</label><input class="form-inp" type="password" placeholder="••••••••" id="dbPass"></div>
+    </div>
+    <div class="form-row"><label class="form-lbl">TABLE / QUERY</label><input class="form-inp" placeholder="SELECT * FROM user_events WHERE date >= NOW() - INTERVAL '30d'" id="dbQuery"></div>
+
+    <div class="db-actions">
+      <button class="db-close" onclick="closeDB()">Cancel</button>
+      <button class="btn btn-ghost" onclick="testConn()" style="flex:1">🔍 Test Connection</button>
+      <button class="btn btn-grad" onclick="saveConn()" style="flex:1">⚡ Save & Connect</button>
+    </div>
+    <div id="connFeedback" style="margin-top:12px;font-family:var(--font-m);font-size:11px;text-align:center;color:var(--muted)"></div>
+  </div>
+</div>
+
+<div class="app">
+  <!-- SIDEBAR -->
+  <aside class="sidebar">
+    <div class="logo-area">
+      <div class="logo-wordmark">Prism Analytics</div>
+      <div class="logo-tag">User Intelligence Platform</div>
+    </div>
+
+    <div class="db-status" onclick="openDB()">
+      <div class="db-status-row">
+        <div class="db-dot" id="dbDot"></div>
+        <span class="db-label" id="dbLabel">No database connected</span>
+      </div>
+      <div class="db-sub" id="dbSub">Click to configure →</div>
+    </div>
+
+    <nav class="nav">
+      <div class="nav-section">ANALYTICS</div>
+      <div class="nav-item active" onclick="go('volume',this)"><span class="nav-icon">📈</span>Volume & Growth<span class="nav-pill">LIVE</span></div>
+      <div class="nav-item" onclick="go('activity',this)"><span class="nav-icon">🔥</span>Activity Heatmap</div>
+      <div class="nav-item" onclick="go('retention',this)"><span class="nav-icon">🔄</span>Retention & Churn</div>
+      <div class="nav-item" onclick="go('funnel',this)"><span class="nav-icon">🎯</span>Funnel Analysis</div>
+      <div class="nav-section">EXPLORE</div>
+      <div class="nav-item" onclick="go('segments',this)"><span class="nav-icon">🔬</span>Segments</div>
+      <div class="nav-item" onclick="go('users',this)"><span class="nav-icon">👥</span>User Records</div>
+    </nav>
+
+    <div class="sidebar-bottom">
+      <div class="range-label">TIME RANGE</div>
+      <div class="range-btns">
+        <button class="range-btn" onclick="setRange(this,'7d')">7D</button>
+        <button class="range-btn active" onclick="setRange(this,'30d')">30D</button>
+        <button class="range-btn" onclick="setRange(this,'90d')">90D</button>
+      </div>
+    </div>
+  </aside>
+
+  <!-- MAIN -->
+  <main class="main">
+    <div class="topbar">
+      <div>
+        <div class="page-title" id="pgTitle">Volume & Growth</div>
+        <div class="page-sub" id="pgSub">Daily active users, new signups & growth trends</div>
+      </div>
+      <div class="topbar-actions">
+        <label class="btn btn-ghost" style="cursor:pointer">
+          ⬆ Upload CSV
+          <input type="file" accept=".csv" style="display:none" onchange="loadCSV(this)">
+        </label>
+        <button class="btn btn-ghost" onclick="openDB()">🔌 Connect DB</button>
+        <button class="btn btn-grad" onclick="refreshAll()">↻ Refresh</button>
+      </div>
+    </div>
+
+    <div class="content">
+
+      <!-- VOLUME & GROWTH -->
+      <section id="s-volume" class="section active">
+        <div class="kpi-grid" id="kpiRow"></div>
+        <div class="g3">
+          <div class="card">
+            <div class="card-header">
+              <div><div class="card-title">User Volume Over Time</div><div class="card-sub">DAU · New Users · Returning Users</div></div>
+              <span class="chip chip-coral">TREND</span>
+            </div>
+            <canvas id="cVolume"></canvas>
+          </div>
+          <div class="card">
+            <div class="card-header">
+              <div><div class="card-title">Traffic Sources</div><div class="card-sub">Acquisition mix</div></div>
+              <span class="chip chip-pink">SOURCE</span>
+            </div>
+            <canvas id="cSource"></canvas>
+          </div>
+        </div>
+        <div class="g2">
+          <div class="card">
+            <div class="card-header">
+              <div><div class="card-title">Device Breakdown</div><div class="card-sub">Sessions by device type</div></div>
+              <span class="chip chip-sky">DEVICE</span>
+            </div>
+            <canvas id="cDevice"></canvas>
+          </div>
+          <div class="card">
+            <div class="card-header">
+              <div><div class="card-title">Top Locations</div><div class="card-sub">User geographic distribution</div></div>
+              <span class="chip chip-lime">GEO</span>
+            </div>
+            <canvas id="cGeo"></canvas>
+          </div>
+        </div>
+      </section>
+
+      <!-- ACTIVITY -->
+      <section id="s-activity" class="section">
+        <div class="g1 card">
+          <div class="card-header">
+            <div><div class="card-title">Activity Heatmap</div><div class="card-sub">Events per hour × day-of-week</div></div>
+            <span class="chip chip-coral">HEATMAP</span>
+          </div>
+          <div class="heatmap-wrap"><div id="hmContainer"></div></div>
+          <div style="display:flex;align-items:center;gap:8px;margin-top:12px;font-family:var(--font-m);font-size:9px;color:var(--muted)">
+            <span>Low</span>
+            <div style="display:flex;gap:2px">${Array.from({length:8},(_,i)=>`<div style="width:16px;height:10px;border-radius:2px;background:hsl(${220+i*20},${60+i*5}%,${70-i*7}%)"></div>`).join('')}</div>
+            <span>High</span>
+          </div>
+        </div>
+        <div class="g2">
+          <div class="card">
+            <div class="card-header"><div><div class="card-title">Sessions per Day</div><div class="card-sub">With 7-day rolling avg</div></div></div>
+            <canvas id="cSessions"></canvas>
+          </div>
+          <div class="card">
+            <div class="card-header"><div><div class="card-title">Top Actions</div><div class="card-sub">Most frequent user events</div></div></div>
+            <canvas id="cActions"></canvas>
+          </div>
+        </div>
+      </section>
+
+      <!-- RETENTION -->
+      <section id="s-retention" class="section">
+        <div class="kpi-grid" id="retKpi"></div>
+        <div class="g1 card">
+          <div class="card-header">
+            <div><div class="card-title">Cohort Retention Matrix</div><div class="card-sub">% of users returning each week after signup</div></div>
+            <span class="chip chip-indigo">COHORT</span>
+          </div>
+          <div class="ret-wrap"><div id="retMatrix"></div></div>
+        </div>
+        <div class="g2">
+          <div class="card">
+            <div class="card-header"><div><div class="card-title">Churn Rate Trend</div><div class="card-sub">Monthly churn over time</div></div></div>
+            <canvas id="cChurn"></canvas>
+          </div>
+          <div class="card">
+            <div class="card-header"><div><div class="card-title">User Lifecycle</div><div class="card-sub">Active · At-risk · Churned</div></div></div>
+            <canvas id="cLifecycle"></canvas>
+          </div>
+        </div>
+      </section>
+
+      <!-- FUNNEL -->
+      <section id="s-funnel" class="section">
+        <div class="g2">
+          <div class="card">
+            <div class="card-header">
+              <div><div class="card-title">Conversion Funnel</div><div class="card-sub">Visit → Signup → Cart → Purchase</div></div>
+              <span class="chip chip-coral">OVERALL</span>
+            </div>
+            <div id="funnelViz" style="margin-top:8px"></div>
+          </div>
+          <div class="card">
+            <div class="card-header"><div><div class="card-title">Funnel by Device</div><div class="card-sub">Conversion rate per device type</div></div></div>
+            <canvas id="cFunnelDevice"></canvas>
+          </div>
+        </div>
+        <div class="card g1">
+          <div class="card-header">
+            <div><div class="card-title">Drop-off Analysis</div><div class="card-sub">Biggest leakage points ranked</div></div>
+            <span class="chip chip-pink">LEAKAGE</span>
+          </div>
+          <canvas id="cDropoff" style="max-height:200px"></canvas>
+        </div>
+      </section>
+
+      <!-- SEGMENTS -->
+      <section id="s-segments" class="section">
+        <div class="g2">
+          <div class="card">
+            <div class="card-header"><div><div class="card-title">Segment Distribution</div><div class="card-sub">User base composition</div></div></div>
+            <canvas id="cSegPie"></canvas>
+          </div>
+          <div class="card">
+            <div class="card-header"><div><div class="card-title">Behavior Radar</div><div class="card-sub">Activity score by segment</div></div></div>
+            <canvas id="cRadar"></canvas>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-header"><div><div class="card-title">Segment Comparison</div></div></div>
+          <div id="segTable"></div>
+        </div>
+      </section>
+
+      <!-- USERS -->
+      <section id="s-users" class="section">
+        <div class="card">
+          <div class="card-header">
+            <div><div class="card-title">User Records</div><div class="card-sub" id="uSub">Loading…</div></div>
+            <input id="uSearch" placeholder="🔍 Search by ID, location, segment…"
+              style="padding:8px 14px;border-radius:10px;border:1.5px solid var(--border);font-family:var(--font-m);font-size:12px;outline:none;width:260px;background:var(--off);color:var(--ink)"
+              oninput="filterUsers(this.value)">
+          </div>
+          <div style="overflow-x:auto" id="uTable"></div>
+        </div>
+      </section>
+
+    </div>
+  </main>
+</div>
+
+<script>
+// ═══════════════════════════════════════════
+// DATA ENGINE
+// ═══════════════════════════════════════════
+const SRCS  = ['Organic','Paid Ads','Social','Email','Direct','Referral'];
+const DEVS  = ['Desktop','Mobile','Tablet'];
+const LOCS  = ['Mumbai','Delhi','Bengaluru','Hyderabad','Chennai','Pune','Kolkata','International'];
+const ACTS  = ['page_view','click','search','add_to_cart','signup','purchase','share','wishlist'];
+const SEGS  = ['new','returning','power','at_risk','churned'];
+
+function genData(n=50000){
+  const now=Date.now(), rows=[];
+  for(let i=0;i<n;i++){
+    const d=Math.floor(Math.random()**1.4*90);
+    const ts=new Date(now-d*86400000);
+    const hr=Math.floor(Math.random()*24);
+    ts.setHours(hr);
+    rows.push({
+      user_id:'U'+String(Math.floor(Math.random()*18000)).padStart(5,'0'),
+      date:ts.toISOString().slice(0,10), hour:hr,
+      action:ACTS[Math.floor(Math.random()*ACTS.length)],
+      device:DEVS[Math.random()<0.52?1:Math.random()<0.65?0:2],
+      location:LOCS[Math.floor(Math.random()*LOCS.length)],
+      source:SRCS[Math.floor(Math.random()*SRCS.length)],
+      session_duration:Math.round(60+Math.random()*840),
+      page_views:Math.ceil(Math.random()*10),
+      segment:SEGS[Math.floor(Math.random()*SEGS.length)]
+    });
+  }
+  return rows;
+}
+
+let RAW=genData(), FD=RAW, range='30d', charts={};
+const PAGES={
+  volume:['Volume & Growth','Daily active users, new signups & growth trends'],
+  activity:['Activity Heatmap','When & how users engage — hourly × day patterns'],
+  retention:['Retention & Churn','Cohort retention matrix and lifecycle tracking'],
+  funnel:['Conversion Funnel','Stage-by-stage drop-off and device conversion'],
+  segments:['Segments','Behavioral segmentation breakdown'],
+  users:['User Records','Searchable per-user activity table'],
+};
+
+// ── NAVIGATION ──
+function go(id, el){
+  document.querySelectorAll('.section').forEach(s=>s.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
+  document.getElementById('s-'+id).classList.add('active');
+  if(el) el.classList.add('active');
+  document.getElementById('pgTitle').textContent=PAGES[id][0];
+  document.getElementById('pgSub').textContent=PAGES[id][1];
+  if(id==='activity')  renderActivity();
+  if(id==='retention') renderRetention();
+  if(id==='funnel')    renderFunnel();
+  if(id==='segments')  renderSegments();
+  if(id==='users')     renderUsers();
+}
+
+function setRange(el,r){
+  document.querySelectorAll('.range-btn').forEach(b=>b.classList.remove('active'));
+  el.classList.add('active'); range=r;
+  const from=new Date(Date.now()-(r==='7d'?7:r==='30d'?30:90)*86400000);
+  FD=RAW.filter(x=>new Date(x.date)>=from);
+  renderAll();
+}
+
+// ── CHART UTIL ──
+function mk(id,cfg){ if(charts[id]) charts[id].destroy(); const c=document.getElementById(id); if(!c)return; charts[id]=new Chart(c,cfg); }
+
+const GS={ tick:{color:'#8B85A8',font:{family:'Fira Code',size:10}}, grid:{color:'rgba(124,131,253,0.08)'} };
+Chart.defaults.font.family='Cabinet Grotesk';
+
+// Vibrant palette
+const PAL=['#FF6B6B','#F72585','#7C83FD','#4FC3F7','#6BCB77','#FFD93D','#FF8E3C','#B5179E','#4CC9F0','#80FFDB'];
+
+function fmt(n){ return n>=1e6?(n/1e6).toFixed(1)+'M':n>=1000?(n/1000).toFixed(1)+'K':String(n); }
+
+// ═══════════════════════════════════════════
+// VOLUME & GROWTH
+// ═══════════════════════════════════════════
+function renderVolume(){
+  const d=FD;
+  const uSet=new Set(d.map(r=>r.user_id));
+  const sessions=d.length, users=uSet.size;
+  const avgDur=Math.round(d.reduce((a,r)=>a+r.session_duration,0)/d.length/60);
+  const pv=d.reduce((a,r)=>a+r.page_views,0);
+
+  document.getElementById('kpiRow').innerHTML=`
+    ${K('kpi-1','📈','Unique Users',fmt(users),'▲ 12.4%')}
+    ${K('kpi-2','⚡','Total Sessions',fmt(sessions),'▲ 8.1%')}
+    ${K('kpi-3','⏱️','Avg Session',avgDur+' min','▼ 2.3%')}
+    ${K('kpi-4','📄','Page Views',fmt(pv),'▲ 18.7%')}
+  `;
+
+  const days=range==='7d'?7:range==='30d'?30:90;
+  const lbls=[],dau=[],newU=[],ret=[];
+  for(let i=days-1;i>=0;i--){
+    const dt=new Date(Date.now()-i*86400000).toISOString().slice(0,10);
+    lbls.push(dt.slice(5));
+    const dr=d.filter(r=>r.date===dt);
+    const u=new Set(dr.map(r=>r.user_id)).size;
+    dau.push(u);
+    newU.push(Math.round(u*(0.22+Math.random()*0.18)));
+    ret.push(Math.round(u*(0.55+Math.random()*0.15)));
+  }
+
+  mk('cVolume',{type:'line',data:{labels:lbls,datasets:[
+    {label:'DAU',data:dau,borderColor:'#FF6B6B',backgroundColor:'rgba(255,107,107,0.08)',fill:true,tension:0.45,borderWidth:2.5,pointRadius:0},
+    {label:'New Users',data:newU,borderColor:'#7C83FD',backgroundColor:'rgba(124,131,253,0.06)',fill:false,tension:0.45,borderWidth:2,pointRadius:0,borderDash:[5,3]},
+    {label:'Returning',data:ret,borderColor:'#6BCB77',fill:false,tension:0.45,borderWidth:1.5,pointRadius:0,borderDash:[2,2]},
+  ]},options:{plugins:{legend:{position:'top',labels:{color:'#8B85A8',boxWidth:12,font:{size:11}}}},scales:{x:{ticks:{...GS.tick,maxTicksLimit:8},grid:GS.grid},y:{ticks:GS.tick,grid:GS.grid}},responsive:true}});
+
+  const sc={};d.forEach(r=>{sc[r.source]=(sc[r.source]||0)+1;});
+  mk('cSource',{type:'doughnut',data:{labels:Object.keys(sc),datasets:[{data:Object.values(sc),backgroundColor:PAL.map(c=>c+'88'),borderColor:PAL,borderWidth:2}]},options:{plugins:{legend:{position:'bottom',labels:{color:'#8B85A8',boxWidth:10,font:{size:11}}}},cutout:'62%',responsive:true}});
+
+  const dc={};d.forEach(r=>{dc[r.device]=(dc[r.device]||0)+1;});
+  mk('cDevice',{type:'bar',data:{labels:Object.keys(dc),datasets:[{data:Object.values(dc),backgroundColor:['rgba(247,37,133,0.25)','rgba(124,131,253,0.25)','rgba(79,195,247,0.25)'],borderColor:['#F72585','#7C83FD','#4FC3F7'],borderWidth:2,borderRadius:10}]},options:{plugins:{legend:{display:false}},scales:{x:{ticks:GS.tick,grid:GS.grid},y:{ticks:GS.tick,grid:GS.grid}},responsive:true}});
+
+  const gc={};d.forEach(r=>{gc[r.location]=(gc[r.location]||0)+1;});
+  const gs=Object.entries(gc).sort((a,b)=>b[1]-a[1]).slice(0,7);
+  mk('cGeo',{type:'bar',data:{labels:gs.map(g=>g[0]),datasets:[{data:gs.map(g=>g[1]),backgroundColor:gs.map((_,i)=>PAL[i%PAL.length]+'44'),borderColor:gs.map((_,i)=>PAL[i%PAL.length]),borderWidth:2,borderRadius:8}]},options:{indexAxis:'y',plugins:{legend:{display:false}},scales:{x:{ticks:GS.tick,grid:GS.grid},y:{ticks:{...GS.tick,font:{family:'Fira Code',size:11}},grid:GS.grid}},responsive:true}});
+}
+
+function K(cls,icon,lbl,val,delta){
+  return`<div class="kpi ${cls}"><div class="kpi-icon-wrap">${icon}</div><div class="kpi-lbl">${lbl}</div><div class="kpi-val">${val}</div><div class="kpi-delta">${delta}</div></div>`;
+}
+
+// ═══════════════════════════════════════════
+// ACTIVITY HEATMAP
+// ═══════════════════════════════════════════
+function renderActivity(){
+  const d=FD;
+  const DAYS=['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+  const heat=Array.from({length:7},()=>Array(24).fill(0));
+  d.forEach(r=>{
+    const dow=new Date(r.date).getDay();
+    heat[dow===0?6:dow-1][r.hour]++;
+  });
+  const mx=Math.max(...heat.flat());
+
+  // Heatmap HTML
+  let html='<div class="hm-hours"><div></div>';
+  for(let h=0;h<24;h++) html+=`<div class="hm-h">${h}h</div>`;
+  html+='</div><div class="hm-grid">';
+  DAYS.forEach((day,di)=>{
+    html+=`<div class="hm-lbl">${day}</div>`;
+    for(let h=0;h<24;h++){
+      const v=heat[di][h], p=mx?v/mx:0;
+      // Vibrant gradient: cool blue → hot pink/red
+      const hue=Math.round(260-p*220);
+      const sat=Math.round(40+p*60), lit=Math.round(80-p*45);
+      const bg=p<0.03?'rgba(124,131,253,0.06)':`hsl(${hue},${sat}%,${lit}%)`;
+      html+=`<div class="hm-cell" style="background:${bg}" data-t="${day} ${h}:00 — ${fmt(v)} events" onmouseenter="showTip(event,this.dataset.t)" onmouseleave="hideTip()"></div>`;
+    }
+  });
+  html+='</div>';
+  document.getElementById('hmContainer').innerHTML=html;
+
+  // Sessions chart
+  const days=range==='7d'?7:range==='30d'?30:90;
+  const sl=[],sv=[],ra=[];
+  for(let i=days-1;i>=0;i--){
+    const dt=new Date(Date.now()-i*86400000).toISOString().slice(0,10);
+    sl.push(dt.slice(5)); sv.push(d.filter(r=>r.date===dt).length);
+  }
+  for(let i=0;i<sv.length;i++){
+    const w=sv.slice(Math.max(0,i-6),i+1);
+    ra.push(Math.round(w.reduce((a,v)=>a+v,0)/w.length));
+  }
+  mk('cSessions',{type:'bar',data:{labels:sl,datasets:[
+    {label:'Sessions',data:sv,backgroundColor:'rgba(124,131,253,0.25)',borderColor:'#7C83FD',borderWidth:1.5,borderRadius:4},
+    {label:'7-day avg',data:ra,type:'line',borderColor:'#F72585',borderWidth:2.5,pointRadius:0,tension:0.4,fill:false},
+  ]},options:{plugins:{legend:{position:'top',labels:{color:'#8B85A8',boxWidth:10,font:{size:11}}}},scales:{x:{ticks:{...GS.tick,maxTicksLimit:8},grid:GS.grid},y:{ticks:GS.tick,grid:GS.grid}},responsive:true}});
+
+  // Top actions
+  const ac={};d.forEach(r=>{ac[r.action]=(ac[r.action]||0)+1;});
+  const as=Object.entries(ac).sort((a,b)=>b[1]-a[1]);
+  mk('cActions',{type:'bar',data:{labels:as.map(a=>a[0]),datasets:[{data:as.map(a=>a[1]),backgroundColor:PAL.map(c=>c+'44'),borderColor:PAL,borderWidth:2,borderRadius:8}]},options:{indexAxis:'y',plugins:{legend:{display:false}},scales:{x:{ticks:GS.tick,grid:GS.grid},y:{ticks:{...GS.tick,font:{family:'Fira Code',size:10}},grid:GS.grid}},responsive:true}});
+}
+
+// ═══════════════════════════════════════════
+// RETENTION
+// ═══════════════════════════════════════════
+function renderRetention(){
+  document.getElementById('retKpi').innerHTML=`
+    ${K('kpi-1','🗓️','Day-1 Retention','42.3%','▲ 3.1%')}
+    ${K('kpi-2','📅','Day-7 Retention','28.1%','▲ 1.4%')}
+    ${K('kpi-3','📆','Day-30 Retention','14.7%','▼ 0.8%')}
+    ${K('kpi-4','💀','Monthly Churn','6.2%','▼ 1.1%')}
+  `;
+
+  // Cohort matrix
+  const COHS=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug'];
+  const WKS=['W0','W1','W2','W3','W4','W5','W6','W7'];
+  const mat=COHS.map((_,ci)=>WKS.map((_,wi)=>{
+    if(wi>COHS.length-1-ci) return null;
+    if(wi===0) return 100;
+    return Math.max(2,Math.round((100-ci*2)*Math.pow(0.71-wi*0.015,wi)*(0.93+Math.random()*0.12)));
+  }));
+
+  let html='<div class="ret-grid">';
+  // Header
+  html+='<div class="ret-row"><div class="ret-label"></div>'+WKS.map(w=>`<div class="ret-cell" style="background:transparent;color:var(--muted);font-size:9px">${w}</div>`).join('')+'</div>';
+  COHS.forEach((c,ci)=>{
+    html+=`<div class="ret-row"><div class="ret-label">${c}</div>`;
+    mat[ci].forEach((v,wi)=>{
+      if(v===null){html+=`<div class="ret-cell" style="background:rgba(0,0,0,0.03)"></div>`;return;}
+      const p=v/100;
+      // Hot colorscale: low=cool indigo, high=vivid pink
+      const h=Math.round(260-p*200), s=Math.round(50+p*40), l=Math.round(75-p*40);
+      html+=`<div class="ret-cell" style="background:hsl(${h},${s}%,${l}%);color:${p>0.5?'#fff':'var(--ink)'}" data-t="Cohort ${c} ${WKS[wi]}: ${v}% retained" onmouseenter="showTip(event,this.dataset.t)" onmouseleave="hideTip()">${v}%</div>`;
+    });
+    html+='</div>';
+  });
+  html+='</div>';
+  document.getElementById('retMatrix').innerHTML=html;
+
+  // Churn trend
+  const cl=['Aug','Sep','Oct','Nov','Dec','Jan','Feb','Mar'];
+  const cv=[8.4,7.9,7.2,7.6,6.8,6.4,6.5,6.2];
+  mk('cChurn',{type:'line',data:{labels:cl,datasets:[{label:'Churn %',data:cv,borderColor:'#FF6B6B',backgroundColor:'rgba(255,107,107,0.1)',fill:true,tension:0.45,borderWidth:2.5,pointRadius:5,pointBackgroundColor:'#FF6B6B',pointBorderColor:'#fff',pointBorderWidth:2}]},options:{plugins:{legend:{display:false}},scales:{x:{ticks:GS.tick,grid:GS.grid},y:{ticks:{...GS.tick,callback:v=>v+'%'},grid:GS.grid}},responsive:true}});
+
+  // Lifecycle
+  const d=FD, sc={};
+  d.forEach(r=>{sc[r.segment]=(sc[r.segment]||0)+1;});
+  mk('cLifecycle',{type:'doughnut',data:{labels:['New','Returning','Power','At-Risk','Churned'],datasets:[{data:[sc.new||1,sc.returning||1,sc.power||1,sc.at_risk||1,sc.churned||1],backgroundColor:['rgba(79,195,247,0.7)','rgba(107,203,119,0.7)','rgba(247,37,133,0.7)','rgba(255,217,61,0.7)','rgba(255,107,107,0.7)'],borderColor:['#4FC3F7','#6BCB77','#F72585','#FFD93D','#FF6B6B'],borderWidth:2}]},options:{plugins:{legend:{position:'right',labels:{color:'#8B85A8',boxWidth:10,font:{size:11}}}},cutout:'58%',responsive:true}});
+}
+
+// ═══════════════════════════════════════════
+// FUNNEL
+// ═══════════════════════════════════════════
+function renderFunnel(){
+  const tot=new Set(FD.map(r=>r.user_id)).size;
+  const stages=[
+    {n:'Visit',       u:tot,             c:'linear-gradient(135deg,#FF6B6B,#FF8E3C)'},
+    {n:'Signup',      u:Math.round(tot*0.28), c:'linear-gradient(135deg,#F72585,#7C83FD)'},
+    {n:'Add to Cart', u:Math.round(tot*0.168),c:'linear-gradient(135deg,#4FC3F7,#6BCB77)'},
+    {n:'Purchase',    u:Math.round(tot*0.024),c:'linear-gradient(135deg,#FFD93D,#6BCB77)'},
+  ];
+
+  const fv=document.getElementById('funnelViz');
+  fv.innerHTML='';
+  stages.forEach((s,i)=>{
+    const pct=((s.u/stages[0].u)*100).toFixed(1);
+    const drop=i>0?(((stages[i-1].u-s.u)/stages[i-1].u)*100).toFixed(1):null;
+    const d=document.createElement('div');
+    d.className='funnel-stage';
+    d.innerHTML=`
+      <div class="funnel-meta">
+        <span class="funnel-name" style="color:var(--ink)">${s.n}</span>
+        ${drop?`<span class="funnel-drop">▼ ${drop}% dropped</span>`:''}
+      </div>
+      <div class="funnel-bar-outer">
+        <div class="funnel-bar-inner" style="width:${Math.max(8,pct)}%;background:${s.c}">
+          <span>${fmt(s.u)}</span><span>${pct}%</span>
+        </div>
+      </div>
+    `;
+    fv.appendChild(d);
+  });
+
+  // Device conversion
+  mk('cFunnelDevice',{type:'bar',data:{
+    labels:['Visit→Signup','Signup→Cart','Cart→Purchase'],
+    datasets:[
+      {label:'Desktop',data:[35,60,38],backgroundColor:'rgba(255,107,107,0.3)',borderColor:'#FF6B6B',borderWidth:2,borderRadius:8},
+      {label:'Mobile',data:[22,52,26],backgroundColor:'rgba(247,37,133,0.3)',borderColor:'#F72585',borderWidth:2,borderRadius:8},
+      {label:'Tablet',data:[29,55,32],backgroundColor:'rgba(124,131,253,0.3)',borderColor:'#7C83FD',borderWidth:2,borderRadius:8},
+    ]
+  },options:{plugins:{legend:{position:'top',labels:{color:'#8B85A8',boxWidth:10,font:{size:11}}}},scales:{x:{ticks:GS.tick,grid:GS.grid},y:{ticks:{...GS.tick,callback:v=>v+'%'},grid:GS.grid,max:100}},responsive:true}});
+
+  mk('cDropoff',{type:'bar',data:{
+    labels:['Visit→Signup (72%)','Signup→Cart (40%)','Cart→Purchase (68%)'],
+    datasets:[{data:[72,40,68],backgroundColor:['rgba(255,217,61,0.4)','rgba(124,131,253,0.4)','rgba(255,107,107,0.4)'],borderColor:['#FFD93D','#7C83FD','#FF6B6B'],borderWidth:2,borderRadius:10}]
+  },options:{indexAxis:'y',plugins:{legend:{display:false}},scales:{x:{ticks:{...GS.tick,callback:v=>v+'%'},grid:GS.grid,max:100},y:{ticks:GS.tick,grid:GS.grid}},responsive:true}});
+}
+
+// ═══════════════════════════════════════════
+// SEGMENTS
+// ═══════════════════════════════════════════
+function renderSegments(){
+  const d=FD, sc={};
+  d.forEach(r=>{sc[r.segment]=(sc[r.segment]||0)+1;});
+  mk('cSegPie',{type:'pie',data:{
+    labels:['New','Returning','Power','At-Risk','Churned'],
+    datasets:[{data:[sc.new||1,sc.returning||1,sc.power||1,sc.at_risk||1,sc.churned||1],backgroundColor:['rgba(79,195,247,0.75)','rgba(107,203,119,0.75)','rgba(247,37,133,0.75)','rgba(255,217,61,0.75)','rgba(255,107,107,0.75)'],borderColor:['#4FC3F7','#6BCB77','#F72585','#FFD93D','#FF6B6B'],borderWidth:2.5}]
+  },options:{plugins:{legend:{position:'right',labels:{color:'#8B85A8',boxWidth:10,font:{size:11}}}},responsive:true}});
+
+  mk('cRadar',{type:'radar',data:{
+    labels:['Sessions','Page Views','Purchases','Shares','Time Spent','Searches'],
+    datasets:[
+      {label:'Power',data:[88,92,78,62,90,72],borderColor:'#F72585',backgroundColor:'rgba(247,37,133,0.15)',borderWidth:2.5,pointRadius:4,pointBackgroundColor:'#F72585'},
+      {label:'Returning',data:[60,65,40,35,58,50],borderColor:'#4FC3F7',backgroundColor:'rgba(79,195,247,0.12)',borderWidth:2,pointRadius:3},
+      {label:'New',data:[28,42,12,18,32,38],borderColor:'#FFD93D',backgroundColor:'rgba(255,217,61,0.1)',borderWidth:2,pointRadius:3},
+      {label:'At-Risk',data:[18,22,8,10,15,12],borderColor:'#FF6B6B',backgroundColor:'rgba(255,107,107,0.1)',borderWidth:1.5,pointRadius:3},
+    ]
+  },options:{plugins:{legend:{position:'top',labels:{color:'#8B85A8',boxWidth:10,font:{size:11}}}},scales:{r:{ticks:{color:'#8B85A8',backdropColor:'transparent',font:{size:9}},grid:{color:'rgba(124,131,253,0.1)'},pointLabels:{color:'#2D2550',font:{size:10}},angleLines:{color:'rgba(124,131,253,0.12)'}}},responsive:true}});
+
+  const rows=[
+    {n:'Power Users',share:'18%',sess:'12.4',pages:'9.2',conv:'8.1%',trend:'▲',bc:'power'},
+    {n:'Returning',share:'34%',sess:'6.8',pages:'5.4',conv:'4.2%',trend:'▲',bc:'return'},
+    {n:'New Users',share:'28%',sess:'2.1',pages:'3.1',conv:'1.8%',trend:'▲',bc:'new'},
+    {n:'At-Risk',share:'12%',sess:'1.2',pages:'1.8',conv:'0.4%',trend:'▼',bc:'atrisk'},
+    {n:'Churned',share:'8%',sess:'0.1',pages:'0.3',conv:'0.1%',trend:'▼',bc:'churned'},
+  ];
+  const maxS=12.4;
+  let html=`<table class="tbl"><thead><tr><th>Segment</th><th>Share</th><th>Avg Sessions/Week</th><th>Avg Pages/Session</th><th>Conv Rate</th><th>Trend</th></tr></thead><tbody>`;
+  rows.forEach(r=>{
+    const w=((parseFloat(r.sess)/maxS)*100).toFixed(0);
+    const tcolor=r.trend==='▲'?'#6BCB77':'#FF6B6B';
+    html+=`<tr>
+      <td><span class="badge badge-${r.bc}">${r.n}</span></td>
+      <td style="font-family:var(--font-m)">${r.share}</td>
+      <td><div class="bar-row"><div class="bar-tr"><div class="bar-f" style="width:${w}%;background:linear-gradient(90deg,#F72585,#7C83FD)"></div></div><span style="font-family:var(--font-m);font-size:11px">${r.sess}</span></div></td>
+      <td style="font-family:var(--font-m)">${r.pages}</td>
+      <td style="font-family:var(--font-m);font-weight:700">${r.conv}</td>
+      <td style="color:${tcolor};font-size:16px;font-weight:800">${r.trend}</td>
+    </tr>`;
+  });
+  html+=`</tbody></table>`;
+  document.getElementById('segTable').innerHTML=html;
+}
+
+// ═══════════════════════════════════════════
+// USER RECORDS
+// ═══════════════════════════════════════════
+let ALL_USERS=[];
+function renderUsers(){
+  const d=FD, um={};
+  d.forEach(r=>{
+    if(!um[r.user_id]) um[r.user_id]={id:r.user_id,sess:0,pages:0,dur:0,device:r.device,location:r.location,source:r.source,segment:r.segment,last:r.date};
+    um[r.user_id].sess++;um[r.user_id].pages+=r.page_views;um[r.user_id].dur+=r.session_duration;
+    if(r.date>um[r.user_id].last){um[r.user_id].last=r.date;um[r.user_id].device=r.device;}
+  });
+  ALL_USERS=Object.values(um).sort((a,b)=>b.sess-a.sess);
+  document.getElementById('uSub').textContent=`Showing ${Math.min(100,ALL_USERS.length).toLocaleString()} of ${ALL_USERS.length.toLocaleString()} users`;
+  drawUserTable(ALL_USERS.slice(0,100));
+}
+
+function drawUserTable(rows){
+  const BC={new:'new',returning:'return',power:'power',at_risk:'atrisk',churned:'churned'};
+  let h=`<table class="tbl"><thead><tr><th>User ID</th><th>Segment</th><th>Sessions</th><th>Avg Dur</th><th>Pages</th><th>Device</th><th>Location</th><th>Source</th><th>Last Active</th></tr></thead><tbody>`;
+  rows.forEach(u=>{
+    const bc=BC[u.segment]||'new';
+    h+=`<tr>
+      <td style="font-family:var(--font-m);color:var(--indigo);font-weight:700">${u.id}</td>
+      <td><span class="badge badge-${bc}">${u.segment}</span></td>
+      <td style="font-family:var(--font-m)">${u.sess}</td>
+      <td style="font-family:var(--font-m)">${Math.round(u.dur/u.sess/60)}m</td>
+      <td style="font-family:var(--font-m)">${u.pages}</td>
+      <td>${u.device}</td><td>${u.location}</td><td>${u.source}</td>
+      <td style="font-family:var(--font-m);color:var(--muted)">${u.last}</td>
+    </tr>`;
+  });
+  h+=`</tbody></table>`;
+  document.getElementById('uTable').innerHTML=h;
+}
+
+function filterUsers(q){
+  const f=q?ALL_USERS.filter(u=>[u.id,u.location,u.segment,u.source].join(' ').toLowerCase().includes(q.toLowerCase())):ALL_USERS;
+  drawUserTable(f.slice(0,100));
+  document.getElementById('uSub').textContent=`Showing ${Math.min(100,f.length)} of ${f.length} users`;
+}
+
+// ═══════════════════════════════════════════
+// CSV LOADER
+// ═══════════════════════════════════════════
+function loadCSV(inp){
+  const file=inp.files[0]; if(!file)return;
+  Papa.parse(file,{header:true,skipEmptyLines:true,complete:res=>{
+    if(!res.data.length){alert('Empty CSV');return;}
+    RAW=res.data.map(r=>({
+      user_id:r.user_id||r.id||'U?', date:r.date||new Date().toISOString().slice(0,10),
+      hour:parseInt(r.hour||'12')||12, action:r.action||'page_view',
+      device:r.device||'Desktop', location:r.location||'Unknown',
+      source:r.source||'Direct', session_duration:parseInt(r.session_duration||'300')||300,
+      page_views:parseInt(r.page_views||'3')||3, segment:r.segment||'new'
+    }));
+    const from=new Date(Date.now()-(range==='7d'?7:range==='30d'?30:90)*86400000);
+    FD=RAW.filter(x=>new Date(x.date)>=from);
+    renderAll();
+    alert(`✅ Loaded ${RAW.length.toLocaleString()} records from ${file.name}`);
+  }});
+}
+
+// ═══════════════════════════════════════════
+// DB CONFIG
+// ═══════════════════════════════════════════
+function openDB(){ document.getElementById('dbModal').classList.add('open'); }
+function closeDB(){ document.getElementById('dbModal').classList.remove('open'); }
+function selectDB(el){ document.querySelectorAll('.db-type-btn').forEach(b=>b.classList.remove('sel')); el.classList.add('sel'); }
+function testConn(){
+  const fb=document.getElementById('connFeedback');
+  fb.style.color='var(--muted)'; fb.textContent='Testing connection…';
+  setTimeout(()=>{
+    const host=document.getElementById('dbHost').value;
+    if(!host){ fb.style.color='var(--coral)'; fb.textContent='⚠️ Please enter a host address.'; return; }
+    fb.style.color='#3aaa4f'; fb.textContent='✅ Connection successful! Ready to sync.';
+  },1200);
+}
+function saveConn(){
+  const host=document.getElementById('dbHost').value;
+  const name=document.getElementById('dbName').value;
+  if(!host){ document.getElementById('connFeedback').textContent='⚠️ Host is required.'; return; }
+  document.getElementById('dbDot').classList.add('connected');
+  document.getElementById('dbLabel').textContent=name||'Database connected';
+  document.getElementById('dbSub').textContent=(host||'').slice(0,28)+'…';
+  closeDB();
+}
+
+// ═══════════════════════════════════════════
+// TOOLTIP
+// ═══════════════════════════════════════════
+const tipEl=document.getElementById('tip');
+function showTip(e,t){ tipEl.textContent=t; tipEl.style.display='block'; moveTip(e); }
+function hideTip(){ tipEl.style.display='none'; }
+document.addEventListener('mousemove',e=>{ if(tipEl.style.display!=='none') moveTip(e); });
+function moveTip(e){ tipEl.style.left=(e.clientX+14)+'px'; tipEl.style.top=(e.clientY-8)+'px'; }
+
+// ═══════════════════════════════════════════
+// REFRESH & INIT
+// ═══════════════════════════════════════════
+function refreshAll(){
+  RAW=genData(); FD=RAW;
+  renderAll();
+}
+
+function renderAll(){
+  renderVolume();
+  // Lazy: re-render active section if not volume
+  const active=document.querySelector('.section.active');
+  if(active){
+    const id=active.id.replace('s-','');
+    if(id==='activity')  renderActivity();
+    if(id==='retention') renderRetention();
+    if(id==='funnel')    renderFunnel();
+    if(id==='segments')  renderSegments();
+    if(id==='users')     renderUsers();
+  }
+}
+
+// Init
+FD=RAW; renderAll();
+</script>
+</body>
+</html>
