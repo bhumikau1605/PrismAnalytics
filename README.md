@@ -23,8 +23,7 @@
 
 <br />
 
-[**→ Live Demo**](#) · [**→ Documentation**](#-documentation) · [**→ Quick Start**](#-quick-start) · [**→ Schema**](#-csv-schema)
-
+[**→ Live Demo**](https://bhumikau1605.github.io/PrismAnalytics/) 
 <br />
 
 </div>
